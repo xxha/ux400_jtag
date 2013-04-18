@@ -65,10 +65,6 @@ typedef unsigned long DWORD;
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#if PORT == DOS
-#include <bios.h>
-#endif
-
 #include "jamexprt.h"
 
 
@@ -76,7 +72,7 @@ typedef unsigned long DWORD;
 #define	JTAG_TMS	5
 #define	JTAG_TCK	4
 #define	JTAG_TDI	6
-
+#define ATOM_GPO3       7
 /*
 
 /************************************************************************
@@ -121,40 +117,6 @@ void close_jtag_hardware(void);
 	const DWORD BEGIN_GUARD = 0x01234567;
 	const DWORD END_GUARD = 0x76543210;
 #endif /* MEM_TRACKER */
-
-#if PORT == WINDOWS || PORT == DOS
-/* parallel port interface available on PC only */
-BOOL specified_lpt_port = FALSE;
-BOOL specified_lpt_addr = FALSE;
-int lpt_port = 1;
-int initial_lpt_ctrl = 0;
-WORD lpt_addr = 0x3bc;
-WORD lpt_addr_table[3] = { 0x3bc, 0x378, 0x278 };
-BOOL alternative_cable_l = FALSE;
-BOOL alternative_cable_x = FALSE;
-void write_byteblaster(int port, int data);
-int read_byteblaster(int port);
-#endif
-
-#if PORT==WINDOWS
-#ifndef __BORLANDC__
-WORD lpt_addresses_from_registry[4] = { 0 };
-#endif
-#endif
-
-#if PORT == WINDOWS
-/* variables to manage cached I/O under Windows NT */
-BOOL windows_nt = FALSE;
-int port_io_count = 0;
-HANDLE nt_device_handle = INVALID_HANDLE_VALUE;
-struct PORT_IO_LIST_STRUCT
-{
-	USHORT command;
-	USHORT data;
-} port_io_buffer[PORT_IO_BUFFER_SIZE];
-extern void flush_ports(void);
-BOOL initialize_nt_driver(void);
-#endif
 
 /* function prototypes to allow forward reference */
 extern void delay_loop(long count);
@@ -240,22 +202,16 @@ int jam_jtag_io(int tms, int tdi, int read_tdo)
 {
 	int data = 0;
 	int tdo = 0;
-	int i = 0;
 	int result = 0;
 
 	if (!jtag_hardware_initialized)
 	{
+		printf("initialize jtag!\n");
 		initialize_jtag_hardware();
 		jtag_hardware_initialized = TRUE;
 	}
 
 	data = ((tdi ? (0x01<<JTAG_TDI) : 0) | (tms ? (0x01<<JTAG_TMS) : 0));
-
-	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data);
-	if (result == FALSE) {
-		printf("SusiIOWriteMulti() failed\n");
-		exit(1);
-	}
 
 	if (read_tdo)
 	{
@@ -265,17 +221,26 @@ int jam_jtag_io(int tms, int tdi, int read_tdo)
 			exit(1);
 		}
 	}
-	
-	data = (tdi ? (0x01<<JTAG_TDI) : 0) | (tms ? (0x01<<JTAG_TMS) : 0) | (0x01<<JTAG_TCK) ;
 
 	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data);
 	if (result == FALSE) {
 		printf("SusiIOWriteMulti() failed\n");
-		return 1;
+		exit(1);
 	}
-				
+	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data | (0x01<<JTAG_TCK));
+	if (result == FALSE) {
+		printf("SusiIOWriteMulti() failed\n");
+		exit(1);
+	}
+
+	tck_delay = 2500000;
 	if (tck_delay != 0) delay_loop(tck_delay);
 
+	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data);
+	if (result == FALSE) {
+		printf("SusiIOWriteMulti() failed\n");
+		exit(1);
+	}
 	return (tdo);
 }
 
@@ -451,6 +416,7 @@ int jam_vector_io
 {
 	int matched_count = 0;
 
+	printf("jam_vector_io\n");
 	if (!jtag_hardware_initialized)
 	{
 		initialize_jtag_hardware();
@@ -1016,7 +982,7 @@ int main(int argc, char **argv)
 			}
 			else
 			{
-				printf("Unknown error code %ld\n", exec_result);
+				printf("Unknown error code %d\n", exec_result);
 			}
 
 			/*
@@ -1033,8 +999,10 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (jtag_hardware_initialized) close_jtag_hardware();
-
+	if (jtag_hardware_initialized) {
+		close_jtag_hardware();
+		jtag_hardware_initialized = FALSE;
+	}
 	if (workspace != NULL) jam_free(workspace);
 	if (file_buffer != NULL) jam_free(file_buffer);
 
@@ -1086,12 +1054,24 @@ void initialize_jtag_hardware()
 		SusiDllUnInit();
 		exit(1);
 	}
-	
+
+	result = SusiIOWriteEx(ATOM_GPO3, 0);
+        if (result == FALSE) {
+                printf("SusiIOWriteEx() failed\n");
+		exit(1);
+        }
+
 }
 
 void close_jtag_hardware()
 {
 	int result;
+
+	result = SusiIOWriteEx(ATOM_GPO3, 0);
+        if (result == FALSE) {
+                printf("SusiIOWriteEx() failed\n");
+		exit(1);
+        }
 	
 	result = SusiDllUnInit();
 	if (result == FALSE) {
