@@ -73,7 +73,6 @@ typedef unsigned long DWORD;
 #define	JTAG_TCK	4
 #define	JTAG_TDI	6
 #define ATOM_GPO3       7
-/*
 
 /************************************************************************
 *
@@ -206,41 +205,41 @@ int jam_jtag_io(int tms, int tdi, int read_tdo)
 
 	if (!jtag_hardware_initialized)
 	{
-		printf("initialize jtag!\n");
 		initialize_jtag_hardware();
 		jtag_hardware_initialized = TRUE;
 	}
 
 	data = ((tdi ? (0x01<<JTAG_TDI) : 0) | (tms ? (0x01<<JTAG_TMS) : 0));
+	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data);
+	if (result == FALSE) {
+		printf("SusiIOWriteMulti() failed\n");
+		exit(1);
+	}
+
+	tck_delay = 2000000;
+	if (tck_delay != 0) delay_loop(tck_delay);
 
 	if (read_tdo)
 	{
-		result = SusiIOReadEx(JTAG_TDO, &tdo);
+		result = SusiIOReadMultiEx(0x01<<JTAG_TDO, &tdo);
 		if (result == FALSE) {
 			printf("SusiIOReadEx() failed\n");
 			exit(1);
 		}
 	}
-
-	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data);
-	if (result == FALSE) {
-		printf("SusiIOWriteMulti() failed\n");
-		exit(1);
-	}
-	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data | (0x01<<JTAG_TCK));
-	if (result == FALSE) {
-		printf("SusiIOWriteMulti() failed\n");
-		exit(1);
-	}
-
-	tck_delay = 2500000;
+	tck_delay = 2000000;
 	if (tck_delay != 0) delay_loop(tck_delay);
 
+	data |= (0x01<<JTAG_TCK);
 	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data);
 	if (result == FALSE) {
 		printf("SusiIOWriteMulti() failed\n");
 		exit(1);
 	}
+
+	tck_delay = 4000000;
+	if (tck_delay != 0) delay_loop(tck_delay);
+
 	return (tdo);
 }
 
@@ -1055,7 +1054,7 @@ void initialize_jtag_hardware()
 		exit(1);
 	}
 
-	result = SusiIOWriteEx(ATOM_GPO3, 0);
+	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS)|(0x01<<ATOM_GPO3), 0);
         if (result == FALSE) {
                 printf("SusiIOWriteEx() failed\n");
 		exit(1);
@@ -1067,7 +1066,7 @@ void close_jtag_hardware()
 {
 	int result;
 
-	result = SusiIOWriteEx(ATOM_GPO3, 0);
+	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS)|(0x01<<ATOM_GPO3), 0);
         if (result == FALSE) {
                 printf("SusiIOWriteEx() failed\n");
 		exit(1);
