@@ -210,14 +210,11 @@ int jam_jtag_io(int tms, int tdi, int read_tdo)
 	}
 
 	data = ((tdi ? (0x01<<JTAG_TDI) : 0) | (tms ? (0x01<<JTAG_TMS) : 0));
-	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data);
+	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS)|(0x01<<ATOM_GPO3), data);
 	if (result == FALSE) {
 		printf("SusiIOWriteMulti() failed\n");
 		exit(1);
 	}
-
-	tck_delay = 2000000;
-	if (tck_delay != 0) delay_loop(tck_delay);
 
 	if (read_tdo)
 	{
@@ -227,18 +224,21 @@ int jam_jtag_io(int tms, int tdi, int read_tdo)
 			exit(1);
 		}
 	}
-	tck_delay = 2000000;
-	if (tck_delay != 0) delay_loop(tck_delay);
 
-	data |= (0x01<<JTAG_TCK);
-	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS), data);
+	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS)|(0x01<<ATOM_GPO3), data|(0x01<<JTAG_TCK));
 	if (result == FALSE) {
 		printf("SusiIOWriteMulti() failed\n");
 		exit(1);
 	}
 
-	tck_delay = 4000000;
+/*	tck_delay = 2500000;
 	if (tck_delay != 0) delay_loop(tck_delay);
+*/
+	result = SusiIOWriteMultiEx((0x01<<JTAG_TCK)|(0x01<<JTAG_TDI)|(0x01<<JTAG_TMS)|(0x01<<ATOM_GPO3), data);
+	if (result == FALSE) {
+		printf("SusiIOWriteMulti() failed\n");
+		exit(1);
+	}
 
 	return (tdo);
 }
